@@ -62,3 +62,17 @@ def collate_video_batch(samples: List[Tuple]) -> dict:
     videos = torch.stack([s[0] for s in samples])
     labels = torch.tensor([s[1] for s in samples], dtype=torch.long)
     return {'video': videos, 'label': labels}
+
+
+def extract_optical_flow(frames: np.ndarray) -> np.ndarray:
+    """Compute dense optical flow (Farneback) between consecutive frames."""
+    flows = []
+    gray = [cv2.cvtColor(f, cv2.COLOR_RGB2GRAY) for f in frames]
+    for i in range(len(gray) - 1):
+        flow = cv2.calcOpticalFlowFarneback(
+            gray[i], gray[i+1], None,
+            pyr_scale=0.5, levels=3, winsize=15,
+            iterations=3, poly_n=5, poly_sigma=1.2, flags=0
+        )
+        flows.append(flow)
+    return np.stack(flows)

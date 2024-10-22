@@ -99,3 +99,13 @@ def benchmark_latency(model: nn.Module, input_shape: tuple,
         'p99_ms': np.percentile(latencies, 99),
         'std_ms': np.std(latencies),
     }
+
+
+def prune_model(model: nn.Module, amount=0.3, method='l1_unstructured') -> nn.Module:
+    """Apply magnitude-based unstructured pruning to Linear layers."""
+    import torch.nn.utils.prune as prune
+    for name, module in model.named_modules():
+        if isinstance(module, nn.Linear):
+            prune.l1_unstructured(module, name='weight', amount=amount)
+            prune.remove(module, 'weight')
+    return model

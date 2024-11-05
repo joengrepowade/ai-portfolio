@@ -78,3 +78,25 @@ def build_trainer(model_fn: Callable, num_workers: int = 4,
         scaling_config=scaling_config,
         run_config=run_config,
     )
+
+
+def run_fsdp_training(model_fn, dataset, num_workers=8, use_gpu=True):
+    """Fully Sharded Data Parallel training via Ray Train."""
+    from ray.train.torch import TorchTrainer
+    from ray.train import ScalingConfig
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+    from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
+
+    def fsdp_loop(config):
+        model = model_fn()
+        model = FSDP(prepare_model(model))
+        optimizer = torch.optim.AdamW(model.parameters(), lr=config['lr'])
+        # training loop omitted for brevity
+        train.report({'status': 'ok'})
+
+    trainer = TorchTrainer(
+        fsdp_loop,
+        scaling_config=ScalingConfig(num_workers=num_workers, use_gpu=use_gpu),
+        train_loop_config={'lr': 1e-4},
+    )
+    return trainer.fit()

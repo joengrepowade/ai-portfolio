@@ -118,3 +118,24 @@ class ModelPerformanceMonitor:
         if clear:
             self.alerts.clear()
         return alerts
+
+
+class EWMADriftDetector:
+    """Exponentially Weighted Moving Average drift detector (Page-Hinkley test)."""
+    def __init__(self, delta=0.005, lambda_=50, alpha=0.99):
+        self.delta = delta
+        self.lambda_ = lambda_
+        self.alpha = alpha
+        self.reset()
+
+    def reset(self):
+        self.sum = 0.0
+        self.min_sum = 0.0
+        self.n = 0
+
+    def update(self, value: float) -> bool:
+        self.n += 1
+        self.sum += value - self.delta
+        self.min_sum = min(self.min_sum, self.sum)
+        ph = self.sum - self.min_sum
+        return ph > self.lambda_

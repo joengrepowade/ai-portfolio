@@ -124,3 +124,20 @@ class MultimodalRetriever:
         for r, s in zip(results, scores):
             r['score'] = float(s)
         return results
+
+
+class ReRanker:
+    """Cross-encoder re-ranking for top-k retrieval results."""
+    def __init__(self, model, tokenizer, device='cuda'):
+        self.model = model.eval().to(device)
+        self.tokenizer = tokenizer
+        self.device = device
+
+    @torch.no_grad()
+    def rerank(self, query: str, candidates: List[Dict], text_key='caption', top_k=5) -> List[Dict]:
+        pairs = [(query, c[text_key]) for c in candidates]
+        enc = self.tokenizer(pairs, return_tensors='pt', padding=True,
+                             truncation=True, max_length=256).to(self.device)
+        scores = self.model(**enc).logits[:, 1].cpu().numpy()
+        ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
+        return [r for r, _ in ranked[:top_k]]

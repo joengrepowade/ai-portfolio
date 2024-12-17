@@ -115,3 +115,13 @@ async def ready():
     if not model_store.list():
         raise HTTPException(status_code=503, detail="No models loaded")
     return {"status": "ready"}
+
+
+@app.post("/v1/models/{model_name}/batch_infer")
+async def batch_infer(model_name: str, requests: List[InferRequest]):
+    """Dynamic batching endpoint - collects multiple requests."""
+    results = []
+    for req in requests:
+        result = await infer(model_name, req, Request(scope={'type': 'http', 'headers': []}))
+        results.append(result)
+    return results

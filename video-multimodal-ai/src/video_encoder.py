@@ -129,3 +129,12 @@ class VideoEncoder(nn.Module):
             tokens = block(tokens, T, H, W)
         tokens = self.norm(tokens)
         return F.normalize(self.head(tokens[:, 0]), dim=-1)
+
+
+def load_pretrained_videomae(n_classes=400, n_frames=16) -> VideoEncoder:
+    """Build VideoMAE-style encoder with pretrained config."""
+    return VideoEncoder(
+        img_size=224, patch_size=16, tubelet_size=2,
+        n_frames=n_frames, embed_dim=768, depth=12,
+        n_heads=12, output_dim=512
+    )

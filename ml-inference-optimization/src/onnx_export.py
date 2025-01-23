@@ -87,3 +87,23 @@ class ONNXInferenceEngine:
         match = np.allclose(torch_out, onnx_out, rtol=rtol, atol=atol)
         print(f"Output match: {match} (max diff: {np.abs(torch_out - onnx_out).max():.6f})")
         return match
+
+
+def quantize_onnx_int8(model_path: str, output_path: str, calibration_data: np.ndarray):
+    """Post-training INT8 quantization via ONNX Runtime."""
+    from onnxruntime.quantization import quantize_static, CalibrationDataReader, QuantType
+
+    class CalibReader(CalibrationDataReader):
+        def __init__(self, data, input_name):
+            self.data = iter(data)
+            self.input_name = input_name
+        def get_next(self):
+            try:
+                return {self.input_name: next(self.data).astype(np.float32)[None]}
+            except StopIteration:
+                return None
+
+    reader = CalibReader(calibration_data, 'input')
+    quantize_static(model_path, output_path, reader,
+                    quant_type=QuantType.QInt8)
+    print(f"INT8 model saved to {output_path}")

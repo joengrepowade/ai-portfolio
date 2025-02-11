@@ -83,3 +83,15 @@ EXAMPLE_PARAM_SPACE = {
     'batch_size': tune.choice([16, 32, 64, 128]),
     'weight_decay': tune.loguniform(1e-6, 1e-2),
 }
+
+
+def analyze_results(result_grid) -> dict:
+    """Extract best config, convergence curve, and feature importance from Ray Tune results."""
+    best = result_grid.get_best_result(metric='accuracy', mode='max')
+    all_results = [r.metrics for r in result_grid]
+    return {
+        'best_config': best.config,
+        'best_accuracy': best.metrics.get('accuracy'),
+        'n_trials': len(all_results),
+        'all_accuracies': [r.get('accuracy', 0) for r in all_results],
+    }

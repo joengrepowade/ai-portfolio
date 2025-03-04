@@ -113,3 +113,14 @@ spec:
         target:
           type: AverageValue
           averageValue: "500m"
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ml-server-pdb
+  namespace: ml-serving
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: ml-model-server

@@ -141,3 +141,17 @@ class ReRanker:
         scores = self.model(**enc).logits[:, 1].cpu().numpy()
         ranked = sorted(zip(candidates, scores), key=lambda x: x[1], reverse=True)
         return [r for r, _ in ranked[:top_k]]
+
+
+def evaluate_retrieval(retriever, queries, ground_truth, k_values=[1, 5, 10]) -> Dict:
+    """Compute Recall@K and MedRank for retrieval evaluation."""
+    recalls = {k: [] for k in k_values}
+    ranks = []
+    for query, gt_ids in zip(queries, ground_truth):
+        results = retriever.retrieve_by_text(query, k=max(k_values))
+        result_ids = [r.get('video_id') for r in results]
+        rank = next((i+1 for i, rid in enumerate(result_ids) if rid in gt_ids), max(k_values)+1)
+        ranks.append(rank)
+        for k in k_values:
+            recalls[k].append(any(rid in gt_ids for rid in result_ids[:k]))
+    return {f'R@{k}': np.mean(recalls[k]) for k in k_values} | {'MedRank': np.median(ranks)}

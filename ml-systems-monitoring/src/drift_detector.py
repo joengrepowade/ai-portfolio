@@ -139,3 +139,27 @@ class EWMADriftDetector:
         self.min_sum = min(self.min_sum, self.sum)
         ph = self.sum - self.min_sum
         return ph > self.lambda_
+
+
+class MultivariateDriftDetector:
+    """Multivariate drift detection using MMD (Maximum Mean Discrepancy)."""
+    def __init__(self, kernel='rbf', bandwidth=1.0, threshold=0.05):
+        self.kernel = kernel
+        self.bandwidth = bandwidth
+        self.threshold = threshold
+
+    def _rbf_kernel(self, X, Y):
+        XX = np.sum(X**2, axis=1)[:,None]
+        YY = np.sum(Y**2, axis=1)[None,:]
+        dist = XX + YY - 2*(X @ Y.T)
+        return np.exp(-dist / (2 * self.bandwidth**2))
+
+    def mmd(self, X: np.ndarray, Y: np.ndarray) -> float:
+        Kxx = self._rbf_kernel(X, X)
+        Kyy = self._rbf_kernel(Y, Y)
+        Kxy = self._rbf_kernel(X, Y)
+        return float(Kxx.mean() + Kyy.mean() - 2*Kxy.mean())
+
+    def detect(self, reference: np.ndarray, current: np.ndarray) -> Dict:
+        stat = self.mmd(reference, current)
+        return {'mmd': stat, 'is_drift': stat > self.threshold, 'threshold': self.threshold}

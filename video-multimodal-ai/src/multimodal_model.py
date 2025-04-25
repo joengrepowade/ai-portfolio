@@ -87,3 +87,22 @@ class MultimodalFusionModel(nn.Module):
         # Simple concat fusion
         fused = torch.cat([v_emb, t_emb, a_emb], dim=-1)
         return self.classifier(fused)
+
+
+class TemporalGrounding(nn.Module):
+    """Predict start/end timestamps for natural language queries in video."""
+    def __init__(self, embed_dim=512, n_heads=8, max_moments=100):
+        super().__init__()
+        self.cross_attn = nn.MultiheadAttention(embed_dim, n_heads, batch_first=True)
+        self.norm = nn.LayerNorm(embed_dim)
+        self.span_head = nn.Sequential(
+            nn.Linear(embed_dim, 256), nn.ReLU(),
+            nn.Linear(256, 2), nn.Sigmoid()
+        )
+
+    def forward(self, video_feats, text_feat):
+        text_exp = text_feat.unsqueeze(1).expand_as(video_feats)
+        fused, _ = self.cross_attn(video_feats, text_exp, text_exp)
+        fused = self.norm(fused + video_feats)
+        spans = self.span_head(fused)
+        return spans  # (B, T, 2) -> start/end per frame

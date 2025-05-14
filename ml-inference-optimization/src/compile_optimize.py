@@ -94,3 +94,38 @@ def profile_model(model, input_shape, device='cpu', use_cuda_events=False):
             for _ in range(10):
                 model(x)
     return prof.key_averages().table(sort_by='cpu_time_total', row_limit=20)
+
+
+class SpeculativeDecoder:
+    """Speculative decoding with draft model for faster LLM inference."""
+    def __init__(self, target_model, draft_model, tokenizer, k=4):
+        self.target = target_model
+        self.draft = draft_model
+        self.tokenizer = tokenizer
+        self.k = k
+
+    @torch.no_grad()
+    def generate(self, input_ids: torch.Tensor, max_new_tokens=50) -> torch.Tensor:
+        generated = input_ids.clone()
+        for _ in range(max_new_tokens // self.k):
+            # Draft: generate k tokens cheaply
+            draft_ids = generated.clone()
+            draft_logits = []
+            for _ in range(self.k):
+                out = self.draft(draft_ids)
+                next_tok = out.logits[:, -1:, :].argmax(dim=-1)
+                draft_logits.append(out.logits[:, -1, :])
+                draft_ids = torch.cat([draft_ids, next_tok], dim=1)
+
+            # Verify with target model
+            target_out = self.target(draft_ids)
+            accepted = 0
+            for i in range(self.k):
+                if torch.allclose(target_out.logits[:, -(self.k-i), :].argmax(-1),
+                                  draft_ids[:, -(self.k-i)], atol=0):
+                    accepted += 1
+                else:
+                    break
+
+            generated = draft_ids[:, :generated.shape[1] + accepted + 1]
+        return generated

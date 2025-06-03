@@ -125,3 +125,35 @@ async def batch_infer(model_name: str, requests: List[InferRequest]):
         result = await infer(model_name, req, Request(scope={'type': 'http', 'headers': []}))
         results.append(result)
     return results
+
+
+class AdaptiveBatcher:
+    """Adaptive dynamic batching with configurable max latency SLO."""
+    def __init__(self, max_batch_size=32, max_wait_ms=20):
+        self.max_batch_size = max_batch_size
+        self.max_wait_ms = max_wait_ms
+        self._queue = asyncio.Queue()
+
+    async def add(self, item):
+        future = asyncio.get_event_loop().create_future()
+        await self._queue.put((item, future))
+        return await future
+
+    async def process_loop(self, model):
+        while True:
+            batch, futures = [], []
+            deadline = time.time() + self.max_wait_ms / 1000
+            while len(batch) < self.max_batch_size and time.time() < deadline:
+                try:
+                    item, fut = await asyncio.wait_for(
+                        self._queue.get(), timeout=max(0, deadline - time.time()))
+                    batch.append(item)
+                    futures.append(fut)
+                except asyncio.TimeoutError:
+                    break
+            if batch:
+                inputs = torch.tensor(batch)
+                with torch.no_grad():
+                    results = model(inputs).tolist()
+                for fut, res in zip(futures, results):
+                    fut.set_result(res)

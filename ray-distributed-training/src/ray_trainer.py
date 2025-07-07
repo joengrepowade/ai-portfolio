@@ -100,3 +100,30 @@ def run_fsdp_training(model_fn, dataset, num_workers=8, use_gpu=True):
         train_loop_config={'lr': 1e-4},
     )
     return trainer.fit()
+
+
+class GradientCheckpointTrainer:
+    """Memory-efficient training with gradient checkpointing + mixed precision."""
+    def __init__(self, model, use_amp=True):
+        self.model = model
+        self.use_amp = use_amp
+        self.scaler = torch.cuda.amp.GradScaler() if use_amp else None
+        # Enable gradient checkpointing
+        if hasattr(model, 'gradient_checkpointing_enable'):
+            model.gradient_checkpointing_enable()
+
+    def train_step(self, batch, optimizer):
+        inputs, labels = batch
+        with torch.cuda.amp.autocast(enabled=self.use_amp):
+            loss = torch.nn.functional.cross_entropy(self.model(inputs), labels)
+        if self.use_amp:
+            self.scaler.scale(loss).backward()
+            self.scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+            self.scaler.step(optimizer)
+            self.scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
+        optimizer.zero_grad()
+        return loss.item()

@@ -155,3 +155,20 @@ def evaluate_retrieval(retriever, queries, ground_truth, k_values=[1, 5, 10]) ->
         for k in k_values:
             recalls[k].append(any(rid in gt_ids for rid in result_ids[:k]))
     return {f'R@{k}': np.mean(recalls[k]) for k in k_values} | {'MedRank': np.median(ranks)}
+
+
+class HardNegativeMiner:
+    """Mine hard negatives for contrastive training improvement."""
+    def __init__(self, index: FAISSVideoIndex, margin=0.2):
+        self.index = index
+        self.margin = margin
+
+    def mine(self, anchors: np.ndarray, positives: np.ndarray, k=50) -> np.ndarray:
+        hard_negatives = []
+        for anchor, pos in zip(anchors, positives):
+            scores, _ = self.index.search(anchor.reshape(1, -1), k=k)
+            pos_score = float(np.dot(anchor, pos))
+            # Hard negative: similar to anchor but not positive
+            hard_neg_scores = [s for s in scores[0] if pos_score - s < self.margin and s < pos_score]
+            hard_negatives.append(hard_neg_scores[:5] if hard_neg_scores else scores[0][:5].tolist())
+        return np.array(hard_negatives)

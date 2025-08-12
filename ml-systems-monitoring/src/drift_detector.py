@@ -163,3 +163,25 @@ class MultivariateDriftDetector:
     def detect(self, reference: np.ndarray, current: np.ndarray) -> Dict:
         stat = self.mmd(reference, current)
         return {'mmd': stat, 'is_drift': stat > self.threshold, 'threshold': self.threshold}
+
+
+class ConfidenceMonitor:
+    """Track model prediction confidence distribution over time."""
+    def __init__(self, low_confidence_threshold=0.7, window=500):
+        self.threshold = low_confidence_threshold
+        self.window = window
+        self.buffer = deque(maxlen=window)
+
+    def update(self, probs: np.ndarray):
+        confidence = probs.max(axis=-1) if probs.ndim > 1 else probs
+        self.buffer.extend(confidence.tolist())
+
+    def report(self) -> Dict:
+        arr = np.array(list(self.buffer))
+        if len(arr) == 0:
+            return {}
+        return {
+            'mean_confidence': float(arr.mean()),
+            'low_confidence_ratio': float((arr < self.threshold).mean()),
+            'p5_confidence': float(np.percentile(arr, 5)),
+        }

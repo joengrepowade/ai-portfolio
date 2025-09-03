@@ -138,3 +138,36 @@ def load_pretrained_videomae(n_classes=400, n_frames=16) -> VideoEncoder:
         n_frames=n_frames, embed_dim=768, depth=12,
         n_heads=12, output_dim=512
     )
+
+
+class MaskedVideoAutoencoder(nn.Module):
+    """VideoMAE-style masked autoencoder for self-supervised pre-training."""
+    def __init__(self, encoder: VideoEncoder, decoder_dim=384,
+                 mask_ratio=0.9, decoder_depth=4):
+        super().__init__()
+        self.encoder = encoder
+        self.mask_ratio = mask_ratio
+        embed_dim = encoder.head.in_features
+        self.decoder = nn.Sequential(*[
+            VideoTransformerBlock(decoder_dim, n_heads=6) for _ in range(decoder_depth)
+        ])
+        self.encoder_to_decoder = nn.Linear(embed_dim, decoder_dim)
+        self.mask_token = nn.Parameter(torch.zeros(1, 1, decoder_dim))
+        self.decoder_head = nn.Linear(decoder_dim, 16 * 16 * 3)  # reconstruct patch pixels
+
+    def random_masking(self, x, mask_ratio):
+        B, N, D = x.shape
+        keep = int(N * (1 - mask_ratio))
+        noise = torch.rand(B, N, device=x.device)
+        ids_shuffle = noise.argsort(dim=1)
+        ids_restore = ids_shuffle.argsort(dim=1)
+        x_masked = torch.gather(x, 1, ids_shuffle[:, :keep, None].expand(-1, -1, D))
+        return x_masked, ids_restore
+
+    def forward(self, x):
+        tokens, T, H, W = self.encoder.patch_embed(x)
+        tokens_masked, ids_restore = self.random_masking(tokens, self.mask_ratio)
+        for block in self.encoder.blocks:
+            tokens_masked = block(tokens_masked, T, H, max(1, W * int((1-self.mask_ratio))))
+        latent = self.encoder.norm(tokens_masked)
+        return latent

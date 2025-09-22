@@ -107,3 +107,18 @@ def quantize_onnx_int8(model_path: str, output_path: str, calibration_data: np.n
     quantize_static(model_path, output_path, reader,
                     quant_type=QuantType.QInt8)
     print(f"INT8 model saved to {output_path}")
+
+
+def export_video_model_onnx(video_encoder, output_path: str, n_frames=8):
+    """Export video encoder to ONNX with dynamic batch and frame axes."""
+    return export_to_onnx(
+        video_encoder,
+        input_shape=(1, 3, n_frames, 224, 224),
+        output_path=output_path,
+        dynamic_axes={
+            'input': {0: 'batch', 2: 'frames'},
+            'output': {0: 'batch'}
+        },
+        input_names=['video'],
+        output_names=['embedding']
+    )

@@ -124,3 +124,24 @@ spec:
   selector:
     matchLabels:
       app: ml-model-server
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ml-serving-ingress
+  namespace: ml-serving
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  rules:
+    - host: ml-api.internal
+      http:
+        paths:
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: ml-model-server-svc
+                port:
+                  number: 80

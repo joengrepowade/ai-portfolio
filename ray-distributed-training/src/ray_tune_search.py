@@ -95,3 +95,19 @@ def analyze_results(result_grid) -> dict:
         'n_trials': len(all_results),
         'all_accuracies': [r.get('accuracy', 0) for r in all_results],
     }
+
+
+def export_best_model(result_grid, model_fn, output_path='best_model.pt'):
+    """Load best checkpoint from Ray Tune results and export."""
+    best = result_grid.get_best_result(metric='accuracy', mode='max')
+    checkpoint = best.checkpoint
+    with checkpoint.as_directory() as ckpt_dir:
+        import os
+        ckpt_file = os.path.join(ckpt_dir, 'model.pt')
+        if os.path.exists(ckpt_file):
+            state = torch.load(ckpt_file, map_location='cpu')
+            model = model_fn(**best.config)
+            model.load_state_dict(state)
+            torch.save(model.state_dict(), output_path)
+            print(f"Best model exported to {output_path}")
+            return model

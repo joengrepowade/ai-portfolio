@@ -172,3 +172,17 @@ class HardNegativeMiner:
             hard_neg_scores = [s for s in scores[0] if pos_score - s < self.margin and s < pos_score]
             hard_negatives.append(hard_neg_scores[:5] if hard_neg_scores else scores[0][:5].tolist())
         return np.array(hard_negatives)
+
+
+class TwoStageRetriever:
+    """Two-stage retrieval: ANN recall + cross-encoder re-ranking."""
+    def __init__(self, fast_retriever: MultimodalRetriever, reranker: 'ReRanker',
+                 recall_k=100, final_k=10):
+        self.retriever = fast_retriever
+        self.reranker = reranker
+        self.recall_k = recall_k
+        self.final_k = final_k
+
+    def retrieve(self, query: str) -> List[Dict]:
+        candidates = self.retriever.retrieve_by_text(query, k=self.recall_k)
+        return self.reranker.rerank(query, candidates, top_k=self.final_k)

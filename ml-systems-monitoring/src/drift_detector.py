@@ -185,3 +185,19 @@ class ConfidenceMonitor:
             'low_confidence_ratio': float((arr < self.threshold).mean()),
             'p5_confidence': float(np.percentile(arr, 5)),
         }
+
+
+class ShadowModeEvaluator:
+    """Run shadow model alongside production model to compare outputs."""
+    def __init__(self, production_model, shadow_model):
+        self.prod = production_model
+        self.shadow = shadow_model
+        self.divergence_log = []
+
+    def evaluate(self, inputs) -> Dict:
+        with torch.no_grad():
+            prod_out = self.prod(inputs).softmax(-1).numpy()
+            shadow_out = self.shadow(inputs).softmax(-1).numpy()
+        kl = float(np.sum(prod_out * np.log(prod_out / (shadow_out + 1e-10) + 1e-10)))
+        self.divergence_log.append(kl)
+        return {'kl_divergence': kl, 'agree': np.argmax(prod_out) == np.argmax(shadow_out)}

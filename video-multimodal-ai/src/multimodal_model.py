@@ -106,3 +106,21 @@ class TemporalGrounding(nn.Module):
         fused = self.norm(fused + video_feats)
         spans = self.span_head(fused)
         return spans  # (B, T, 2) -> start/end per frame
+
+
+class VideoQAModel(nn.Module):
+    """Video Question Answering with cross-modal attention."""
+    def __init__(self, video_dim=512, text_dim=768, hidden=512, n_answers=1000):
+        super().__init__()
+        self.video_proj = nn.Linear(video_dim, hidden)
+        self.text_proj = nn.Linear(text_dim, hidden)
+        self.cross_attn = nn.MultiheadAttention(hidden, num_heads=8, batch_first=True)
+        self.classifier = nn.Sequential(
+            nn.LayerNorm(hidden), nn.Linear(hidden, n_answers)
+        )
+
+    def forward(self, video_feats, text_feat):
+        v = self.video_proj(video_feats)
+        t = self.text_proj(text_feat).unsqueeze(1)
+        attended, _ = self.cross_attn(t, v, v)
+        return self.classifier(attended.squeeze(1))
